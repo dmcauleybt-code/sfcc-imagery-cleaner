@@ -5,11 +5,10 @@ import re
 
 st.title("SFCC Imagery XML Cleaner")
 
-st.write("Upload an SFCC XML file and choose which images to remove.")
-
 uploaded_file = st.file_uploader("Upload XML File", type=["xml"])
 
 if uploaded_file:
+    # Parse XML
     tree = ET.parse(uploaded_file)
     root = tree.getroot()
 
@@ -33,45 +32,40 @@ if uploaded_file:
         options=sorted(set(image_paths))
     )
 
-    # ---- Bulk delete by filename index (_01, _02, _03, etc.) ----
+    # Bulk delete by index (_01, _02, _03)
     st.subheader("Bulk Delete by Image Index (e.g. _01, _02, _03)")
 
     indices = set()
     for p in image_paths:
-        filename = p.split("/")[-1]          # e.g. 2000365659_01.jpg?$pdp_zoom$
-        filename = filename.split("?")[0]    # e.g. 2000365659_01.jpg
+        filename = p.split("/")[-1].split("?")[0]
         match = re.search(r"_(\d+)\.jpg$", filename)
         if match:
             indices.add(f"_{match.group(1)}")
 
-    indices = sorted(indices)
-
     bulk_indices = st.multiselect(
         "Delete all images with these indices:",
-        options=indices,
-        help="For example, selecting _02 will delete all images whose filename ends in _02.jpg"
+        options=sorted(indices)
     )
 
+    # Output filename
+    output_name = st.text_input("Output filename (without extension):", "Imagery_Result")
+
     if st.button("Generate Cleaned XML"):
+        # Build deletion list
         to_delete = set(selected_images)
 
-        # Add bulk deletions based on index (_01, _02, etc.)
         for p in image_paths:
-            filename = p.split("/")[-1]
-            filename_no_query = filename.split("?")[0]
-
+            filename = p.split("/")[-1].split("?")[0]
             for idx in bulk_indices:
-                if filename_no_query.endswith(f"{idx}.jpg"):
+                if filename.endswith(f"{idx}.jpg"):
                     to_delete.add(p)
 
         # -------------------------------
         # BUILD CLEAN OUTPUT XML
         # -------------------------------
-
         ET.register_namespace('', NS)
         new_catalog = ET.Element(f"{{{NS}}}catalog", {"catalog-id": "bta-master-catalog"})
 
-        # Loop through products and rebuild only product + images
         for product in root.findall("ns:product", namespace):
             new_product = ET.SubElement(new_catalog, f"{{{NS}}}product", {
                 "product-id": product.attrib["product-id"]
@@ -79,7 +73,6 @@ if uploaded_file:
 
             images_node = ET.SubElement(new_product, f"{{{NS}}}images")
 
-            # Copy only image groups + images that are NOT deleted
             for img_group in product.findall("ns:images/ns:image-group", namespace):
                 new_group = ET.SubElement(images_node, f"{{{NS}}}image-group", {
                     "view-type": img_group.attrib["view-type"]
@@ -92,20 +85,17 @@ if uploaded_file:
                         })
 
         # -------------------------------
-        # WRITE CLEAN XML
+        # WRITE CLEAN XML (NO .xsl / .bin ISSUES)
         # -------------------------------
         xml_bytes = BytesIO()
         ET.ElementTree(new_catalog).write(xml_bytes, encoding="utf-8", xml_declaration=True)
         xml_bytes.seek(0)
 
-        output_name = st.text_input("Enter output filename (without extension):", "Imagery_Result")
+        st.download_button(
+            label="Download Cleaned XML",
+            data=xml_bytes.getvalue(),
+            file_name=f"{output_name}.xml",
+            mime="application/xml"
+        )
 
-        if output_name:
-            st.download_button(
-                label="Download Cleaned XML",
-                data=xml_bytes.getvalue(),
-                file_name=f"{output_name}.xml",
-                mime="application/octet-stream"
-            )
-
-            st.success("Your cleaned XML is ready to download.")
+        st.success("Your cleaned XML is ready to download.")
