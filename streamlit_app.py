@@ -37,9 +37,9 @@ if uploaded_file:
 
     suffixes = set()
     for p in image_paths:
-        filename = p.split("/")[-1].split("?")[0]  # strip query params
+        filename = p.split("/")[-1].split("?")[0] # strip query params
         base = filename.split(".")[0]              # remove .jpg
-        match = re.search(r"_(.+)$", base)         # capture anything after last underscore
+        match = re.search(r"_([^_]+)$", base)         # capture anything after last underscore
         if match:
             suffixes.add(f"_{match.group(1)}")
 
