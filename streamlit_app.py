@@ -105,7 +105,7 @@ if uploaded_file:
                 label="Download Cleaned XML",
                 data=xml_bytes.getvalue(),
                 file_name=f"{output_name}.xml",
-                mime="application/xml"
+                mime="application/octet-stream"
             )
 
             st.success("Your cleaned XML is ready to download.")
