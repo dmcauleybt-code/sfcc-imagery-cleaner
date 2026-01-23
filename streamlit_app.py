@@ -13,7 +13,8 @@ if uploaded_file:
     tree = ET.parse(uploaded_file)
     root = tree.getroot()
 
-    namespace = {"ns": "http://www.demandware.com/xml/impex/catalog/2006-10-31"}
+    NS = "http://www.demandware.com/xml/impex/catalog/2006-10-31"
+    namespace = {"ns": NS}
 
     # Collect all image paths
     image_paths = []
@@ -35,7 +36,6 @@ if uploaded_file:
     # ---- Bulk delete by filename index (_01, _02, _03, etc.) ----
     st.subheader("Bulk Delete by Image Index (e.g. _01, _02, _03)")
 
-    # Extract indices from filenames like 2000365659_01.jpg?$pdp_zoom$
     indices = set()
     for p in image_paths:
         filename = p.split("/")[-1]          # e.g. 2000365659_01.jpg?$pdp_zoom$
@@ -57,29 +57,50 @@ if uploaded_file:
 
         # Add bulk deletions based on index (_01, _02, etc.)
         for p in image_paths:
-            filename = p.split("/")[-1]          # e.g. 2000365659_01.jpg?$pdp_zoom$
-            filename_no_query = filename.split("?")[0]  # e.g. 2000365659_01.jpg
+            filename = p.split("/")[-1]
+            filename_no_query = filename.split("?")[0]
 
             for idx in bulk_indices:
-                # idx is like "_01" → we want filenames ending with "_01.jpg"
                 if filename_no_query.endswith(f"{idx}.jpg"):
                     to_delete.add(p)
 
-        # Remove images from XML
-        for product in root.findall("ns:product", namespace):
-            for img_group in product.findall("ns:images/ns:image-group", namespace):
-                for img in list(img_group.findall("ns:image", namespace)):
-                    if img.attrib.get("path") in to_delete:
-                        img_group.remove(img)
+        # -------------------------------
+        # BUILD CLEAN OUTPUT XML
+        # -------------------------------
 
-        # Ask for output filename
+        ET.register_namespace('', NS)
+        new_catalog = ET.Element(f"{{{NS}}}catalog", {"catalog-id": "bta-master-catalog"})
+
+        # Loop through products and rebuild only product + images
+        for product in root.findall("ns:product", namespace):
+            new_product = ET.SubElement(new_catalog, f"{{{NS}}}product", {
+                "product-id": product.attrib["product-id"]
+            })
+
+            images_node = ET.SubElement(new_product, f"{{{NS}}}images")
+
+            # Copy only image groups + images that are NOT deleted
+            for img_group in product.findall("ns:images/ns:image-group", namespace):
+                new_group = ET.SubElement(images_node, f"{{{NS}}}image-group", {
+                    "view-type": img_group.attrib["view-type"]
+                })
+
+                for img in img_group.findall("ns:image", namespace):
+                    if img.attrib.get("path") not in to_delete:
+                        ET.SubElement(new_group, f"{{{NS}}}image", {
+                            "path": img.attrib["path"]
+                        })
+
+        # -------------------------------
+        # WRITE CLEAN XML
+        # -------------------------------
+        xml_bytes = BytesIO()
+        ET.ElementTree(new_catalog).write(xml_bytes, encoding="utf-8", xml_declaration=True)
+        xml_bytes.seek(0)
+
         output_name = st.text_input("Enter output filename (without extension):", "Imagery_Result")
 
         if output_name:
-            xml_bytes = BytesIO()
-            tree.write(xml_bytes, encoding="utf-8", xml_declaration=True)
-            xml_bytes.seek(0)
-
             st.download_button(
                 label="Download Cleaned XML",
                 data=xml_bytes.getvalue(),
