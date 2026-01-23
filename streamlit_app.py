@@ -32,33 +32,46 @@ if uploaded_file:
         options=sorted(set(image_paths))
     )
 
-    # Bulk delete by index (_01, _02, _03)
-    st.subheader("Bulk Delete by Image Index (e.g. _01, _02, _03)")
+    # ---- Bulk delete by suffix (_01, _02, _set, _PSWATCH, etc.) ----
+    st.subheader("Bulk Delete by Image Suffix")
 
-    indices = set()
+    suffixes = set()
     for p in image_paths:
-        filename = p.split("/")[-1].split("?")[0]
-        match = re.search(r"_(\d+)\.jpg$", filename)
+        filename = p.split("/")[-1].split("?")[0]  # strip query params
+        base = filename.split(".")[0]              # remove .jpg
+        match = re.search(r"_(.+)$", base)         # capture anything after last underscore
         if match:
-            indices.add(f"_{match.group(1)}")
+            suffixes.add(f"_{match.group(1)}")
 
-    bulk_indices = st.multiselect(
-        "Delete all images with these indices:",
-        options=sorted(indices)
+    suffixes = sorted(suffixes)
+
+    bulk_suffixes = st.multiselect(
+        "Delete all images with these suffixes:",
+        options=suffixes,
+        help="Includes numeric (_01) and text (_set, _PSWATCH) suffixes"
     )
+
+    # ---- Delete ALL imagery toggle ----
+    delete_all = st.checkbox("Delete ALL imagery for all products")
 
     # Output filename
     output_name = st.text_input("Output filename (without extension):", "Imagery_Result")
 
     if st.button("Generate Cleaned XML"):
-        # Build deletion list
         to_delete = set(selected_images)
 
-        for p in image_paths:
-            filename = p.split("/")[-1].split("?")[0]
-            for idx in bulk_indices:
-                if filename.endswith(f"{idx}.jpg"):
-                    to_delete.add(p)
+        # If delete-all is selected, mark every image for deletion
+        if delete_all:
+            to_delete = set(image_paths)
+        else:
+            # Add bulk deletions based on suffixes
+            for p in image_paths:
+                filename = p.split("/")[-1].split("?")[0]
+                base = filename.split(".")[0]
+
+                for suf in bulk_suffixes:
+                    if base.endswith(suf):
+                        to_delete.add(p)
 
         # -------------------------------
         # BUILD CLEAN OUTPUT XML
@@ -85,7 +98,7 @@ if uploaded_file:
                         })
 
         # -------------------------------
-        # WRITE CLEAN XML (NO .xsl / .bin ISSUES)
+        # WRITE CLEAN XML
         # -------------------------------
         xml_bytes = BytesIO()
         ET.ElementTree(new_catalog).write(xml_bytes, encoding="utf-8", xml_declaration=True)
