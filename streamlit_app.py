@@ -1,6 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
 from io import BytesIO
+import re
 
 st.title("SFCC Imagery XML Cleaner")
 
@@ -28,25 +29,40 @@ if uploaded_file:
     # Individual image selection
     selected_images = st.multiselect(
         "Choose individual images to delete:",
-        options=image_paths
+        options=sorted(set(image_paths))
     )
 
-    # Bulk delete options
-    st.subheader("Bulk Delete Options")
-    suffixes = sorted({p.split("_")[-1].split(".")[0] for p in image_paths})
-    bulk_delete = st.multiselect(
-        "Delete all images ending with these suffixes (e.g., _02, _03, _99):",
-        options=suffixes
+    # ---- Bulk delete by filename index (_01, _02, _03, etc.) ----
+    st.subheader("Bulk Delete by Image Index (e.g. _01, _02, _03)")
+
+    # Extract indices from filenames like 2000365659_01.jpg?$pdp_zoom$
+    indices = set()
+    for p in image_paths:
+        filename = p.split("/")[-1]          # e.g. 2000365659_01.jpg?$pdp_zoom$
+        filename = filename.split("?")[0]    # e.g. 2000365659_01.jpg
+        match = re.search(r"_(\d+)\.jpg$", filename)
+        if match:
+            indices.add(f"_{match.group(1)}")
+
+    indices = sorted(indices)
+
+    bulk_indices = st.multiselect(
+        "Delete all images with these indices:",
+        options=indices,
+        help="For example, selecting _02 will delete all images whose filename ends in _02.jpg"
     )
 
-    # Process deletion
     if st.button("Generate Cleaned XML"):
         to_delete = set(selected_images)
 
-        # Add bulk deletions
-        for suf in bulk_delete:
-            for p in image_paths:
-                if p.endswith(f"{suf}.jpg") or f"{suf}." in p:
+        # Add bulk deletions based on index (_01, _02, etc.)
+        for p in image_paths:
+            filename = p.split("/")[-1]          # e.g. 2000365659_01.jpg?$pdp_zoom$
+            filename_no_query = filename.split("?")[0]  # e.g. 2000365659_01.jpg
+
+            for idx in bulk_indices:
+                # idx is like "_01" → we want filenames ending with "_01.jpg"
+                if filename_no_query.endswith(f"{idx}.jpg"):
                     to_delete.add(p)
 
         # Remove images from XML
@@ -60,7 +76,6 @@ if uploaded_file:
         output_name = st.text_input("Enter output filename (without extension):", "Imagery_Result")
 
         if output_name:
-            # Convert XML to downloadable bytes
             xml_bytes = BytesIO()
             tree.write(xml_bytes, encoding="utf-8", xml_declaration=True)
             xml_bytes.seek(0)
