@@ -87,10 +87,7 @@ if uploaded_file:
             images_node = ET.SubElement(new_product, f"{{{NS}}}images")
 
             for img_group in product.findall("ns:images/ns:image-group", namespace):
-                new_group = ET.SubElement(images_node, f"{{{NS}}}image-group", {
-                    "view-type": img_group.attrib["view-type"]
-                })
-
+                new_group = ET.SubElement(images_node, f"{{{NS}}}image-group", dict(img_group.attrib))
                 for img in img_group.findall("ns:image", namespace):
                     if img.attrib.get("path") not in to_delete:
                         ET.SubElement(new_group, f"{{{NS}}}image", {
