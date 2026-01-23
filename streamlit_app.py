@@ -82,7 +82,7 @@ if uploaded_file:
 
             st.download_button(
                 label="Download Cleaned XML",
-                data=xml_bytes,
+                data=xml_bytes.getvalue(),
                 file_name=f"{output_name}.xml",
                 mime="application/xml"
             )
