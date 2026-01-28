@@ -88,6 +88,12 @@ if uploaded_file:
 
             for img_group in product.findall("ns:images/ns:image-group", namespace):
                 new_group = ET.SubElement(images_node, f"{{{NS}}}image-group", dict(img_group.attrib))
+                
+                # Copy variation elements if they exist
+                for variation in img_group.findall("ns:variation", namespace):
+                    ET.SubElement(new_group, f"{{{NS}}}variation", dict(variation.attrib))
+                
+                # Copy images that aren't being deleted
                 for img in img_group.findall("ns:image", namespace):
                     if img.attrib.get("path") not in to_delete:
                         ET.SubElement(new_group, f"{{{NS}}}image", {
